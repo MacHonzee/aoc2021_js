@@ -9,7 +9,7 @@ function debugMap(map) {
   for (let y = 0; y <= maxY; y++) {
     let newRow = [];
     for (let x = 0; x <= maxX; x++) {
-      newRow.push(".");
+      newRow.push("  ");
     }
     newMap.push(newRow.join(""));
   }
@@ -26,13 +26,13 @@ let map = [...coords];
 for (let [axis, line] of folds) {
   // debugMap(map);
 
-  let newMap = [];
+  let newMap = new Set();
   for (let point of map) {
     let pointCoords = point.split(",").map(Number);
 
     // check if it is on top or left part of map
     if ((axis === "x" && pointCoords[0] < line) || (axis === "y" && pointCoords[1] < line)) {
-      newMap.push(point);
+      newMap.add(point);
       continue;
     }
 
@@ -45,25 +45,20 @@ for (let [axis, line] of folds) {
     // fold the point by the axis
     let newPoint;
     if (axis === "x") {
-      // TODO investigate why the fuck I need the magic (- 1) here
-      newPoint = [pointCoords[0] - (2 * (pointCoords[0] - line)) - 1, pointCoords[1]];
+      // TODO why the fuck it does not work like this:
+      //  newPoint = [pointCoords[0] - (2 * (pointCoords[0] - line)), pointCoords[1]];
+      newPoint = [line - (pointCoords[0] - line), pointCoords[1]];
     } else {
-      newPoint = [pointCoords[0], pointCoords[1] - (2 * (pointCoords[1] - line)) - 1];
+      newPoint = [pointCoords[0], line - (pointCoords[1] - line)];
     }
     newPoint = newPoint.join(",");
 
-    // check unique point
-    if (!newMap.includes(newPoint)) {
-      newMap.push(newPoint);
-    }
+    newMap.add(newPoint);
   }
 
   // and go for next fold
   map = [...newMap];
-
-  break;
 }
 
-// debugMap(map);
-console.log("845 ani 897 to není");
+debugMap(map);
 console.log(map.length);
