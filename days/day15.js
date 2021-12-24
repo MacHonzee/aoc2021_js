@@ -1,93 +1,145 @@
 const chalk = require("chalk");
 const map = require("../inputs/day15");
+const Heap = require("heap");
+
+function calculatePath(grid) {
+  const MAX_X = grid[0].length - 1;
+  const MAX_Y = grid.length - 1;
+  const RISK_MAP = grid.reduce((final, line, y) => {
+    line.forEach((risk, x) => {
+      final[`${x},${y}`] = risk;
+    });
+    return final;
+  }, {});
+
+  function drawPath(grid, path) {
+    grid.forEach((line, y) => {
+      let str = "";
+      line.forEach((risk, x) => {
+        if (path.has([x, y].join(","))) {
+          str += chalk.red(risk);
+        } else {
+          str += risk;
+        }
+      });
+      console.log(str);
+    });
+    console.log("\n");
+  }
+
+  function estimateEnd(coords) {
+    let [x, y] = coords.split(",").map(Number);
+    return 1234;
+    // return MAX_X - x + MAX_Y - y; // TODO I don't understand this shit at all, why does it work properly if number is constant
+    // and I get different value when number is dynamic?
+  }
+
+  function getNeighbors(position) {
+    let [x, y] = position.split(",").map(Number);
+    let neighbors = [];
+
+    if (x < MAX_X) {
+      neighbors.push([x + 1, y]);
+    }
+    if (x > 0) {
+      neighbors.push([x - 1, y]);
+    }
+    if (y < MAX_Y) {
+      neighbors.push([x, y + 1]);
+    }
+    if (y > 0) {
+      neighbors.push([x, y - 1]);
+    }
+
+    return { neighbors, neighborStrings: neighbors.map(coord => coord.join(",")) };
+  }
+
+  function reconstructPath(cameFrom, current) {
+    let totalPath = [{ coords: current, risk: RISK_MAP[current] }];
+    while (current in cameFrom) {
+      current = cameFrom[current];
+      totalPath.unshift({ coords: current, risk: RISK_MAP[current] });
+    }
+    return totalPath;
+  }
+
+  function aStar(start, end, grid) {
+
+    let openSet = new Heap((a, b) => a.fScore - b.fScore);
+    openSet.push({ coords: start, fScore: 0 });
+    let openPaths = new Set([start]);
+
+    let cameFrom = {};
+
+    let gScore = {};
+    gScore[start] = 0;
+
+    let fScore = {};
+    fScore[start] = 0;
+
+    while (!openSet.empty()) {
+      let current = openSet.pop();
+      openPaths.delete(current.coords);
+
+      if (current.coords === end) {
+        return reconstructPath(cameFrom, current.coords); // TODO  reconstructPath
+      }
+
+      let { neighbors, neighborStrings } = getNeighbors(current.coords);
+      neighbors.forEach((neighbor, i) => {
+        let neighborStr = neighborStrings[i];
+        if (cameFrom[neighborStr] || neighborStr === START) return;
+
+        gScore[neighborStr] = gScore[neighborStr] || Infinity;
+
+        let tentative_gScore = gScore[current.coords] + grid[neighbor[1]][neighbor[0]];
+        if (tentative_gScore < gScore[neighborStr]) {
+          cameFrom[neighborStr] = current.coords;
+          gScore[neighborStr] = tentative_gScore;
+          fScore[neighborStr] = tentative_gScore + estimateEnd(neighborStr);
+
+          if (!openPaths.has(neighborStr)) {
+            openSet.push({ coords: neighborStr, fScore: fScore[neighborStr] });
+            openPaths.add(neighborStr);
+          }
+        }
+      });
+    }
+
+    throw "No path to end was found!";
+  }
+
+  const START = "0,0";
+  const GOAL = `${MAX_X},${MAX_Y}`;
+
+  let finalPath = aStar(START, GOAL, grid);
+  let route = new Set(finalPath.map(path => path.coords));
+  drawPath(grid, route);
+  let finalRisk = finalPath.reduce((sum, path) => sum + path.risk, 0) - grid[0][0];
+
+  console.log(finalRisk);
+}
 
 // part one
-const MAX_X = map[0].length - 1;
-const MAX_Y = map.length - 1;
-// magic constant, bigger => worse performance but more optimalization
-// for example MAX_DEPTH = 3 means that the algorithm will check best route for 3 steps ahead
-const MAX_DEPTH = 25;
-const END = [MAX_X, MAX_Y];
+// calculatePath(map);
 
-const RISK_MAP = map.reduce((final, line, y) => {
+// part two
+let biggerMap = [];
+map.forEach((line, y) => {
   line.forEach((risk, x) => {
-    final[`${x},${y}`] = risk;
-  });
-  return final;
-}, {});
+    for (let yPlus = 0; yPlus <= 4; yPlus++) {
+      for (let xPlus = 0; xPlus <= 4; xPlus++) {
+        let newRisk = risk + xPlus + yPlus;
+        if (newRisk > 9) {
+          newRisk = newRisk % 9;
+        }
 
-function getNextCoords (position, excludedPath, takenPath) {
-  let [x, y] = position;
-  let coords = [];
-  let strCoords = [];
-
-  let leftStr = `${x + 1},${y}`;
-  let bottomStr = `${x},${y + 1}`;
-  if (x < MAX_X && !excludedPath.has(leftStr) && !takenPath.has(leftStr)) {
-    coords.push([x + 1, y]);
-    strCoords.push(leftStr);
-  }
-  if (y < MAX_Y && !excludedPath.has(bottomStr) && !takenPath.has(bottomStr)) {
-    coords.push([x, y + 1]);
-    strCoords.push(bottomStr);
-  }
-
-  return { coords, strCoords };
-}
-
-function expandPath (position, currentPath, lowestRiskPath, takenPath) {
-  if (currentPath.size > MAX_DEPTH || (position[0] === END[0] && position[1] === END[1])) {
-    let pathRisk = getRiskOfPath(currentPath);
-    if (!lowestRiskPath.risk || lowestRiskPath.risk > pathRisk) {
-      lowestRiskPath.risk = pathRisk;
-      lowestRiskPath.path = currentPath;
-    }
-    return lowestRiskPath;
-  }
-
-  let { coords: nextCoords, strCoords } = getNextCoords(position, currentPath, takenPath);
-  nextCoords.forEach((coords, i) => {
-    let newPath = new Set([...currentPath, strCoords[i]]);
-    expandPath(coords, newPath, lowestRiskPath, takenPath);
-  });
-
-  return lowestRiskPath;
-}
-
-function getRiskOfPath (path) {
-  return Array.from(path).reduce((sum, coords) => sum + RISK_MAP[coords], 0);
-}
-
-function drawPath (path) {
-  map.forEach((line, y) => {
-    let str = "";
-    line.forEach((risk, x) => {
-      if (path.has([x, y].join(","))) {
-        str += chalk.red(risk);
-      } else {
-        str += risk;
+        biggerMap[y + (map.length * yPlus)] = biggerMap[y + (map.length * yPlus)] || [];
+        biggerMap[y + (map.length * yPlus)][x + (line.length * xPlus)] = newRisk;
       }
-    });
-    console.log(str);
+    }
   });
-  console.log("\n");
-}
+});
 
-let current = [0, 0];
-let takenPath = new Set();
-while (!(current[0] === END[0] && current[1] === END[1])) {
-  console.log(current);
-
-  let lowestRiskPath = expandPath(current, new Set([current.join(",")]), {}, takenPath);
-
-  current = Array.from(lowestRiskPath.path).pop().split(",").map(Number);
-  takenPath = new Set([...takenPath, ...lowestRiskPath.path]);
-}
-
-drawPath(takenPath);
-
-let finalRisk = getRiskOfPath(takenPath);
-finalRisk -= map[0][0];
-// 405 ani 535 to není (answer was too high)
-console.log(finalRisk);
-
+// 527 je too low, 3402 je too high
+calculatePath(biggerMap);
