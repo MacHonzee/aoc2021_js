@@ -6,41 +6,43 @@ function withinTarget(position, target) {
 }
 
 function getXvelocities(target) {
-  let hitsTarget = new Set();
+  let hitsTarget = {};
   for (let x = 1; x < 1000; x++) {
-    // TODO I need to save number of steps needed to achieve target position, so that later we can
-    // find matching Y velocity with same number of steps (if X reaches target in 2 steps, so should Y reach it in 2 steps too)
     let xPosition = 0;
     let velocity = x;
+    let step = 0;
     while (velocity > 0 && xPosition <= target.x.right) {
       xPosition += velocity;
       velocity--;
+      step++;
 
       if (withinTarget([xPosition, target.y.top], target)) {
-        hitsTarget.add(x);
+        hitsTarget[x] = step;
       }
     }
   }
 
-  return Array.from(hitsTarget);
+  return hitsTarget;
 }
 
 function getYvelocities(target) {
-  let hitsTarget = new Set();
+  let hitsTarget = {};
   for (let y = -1000; y < 1000; y++) {
     let yPosition = 0;
     let velocity = y;
+    let step = 0;
     while (yPosition >= target.y.bottom) {
       yPosition += velocity;
       velocity--;
+      step++;
 
       if (withinTarget([target.x.left, yPosition], target)) {
-        hitsTarget.add(y);
+        hitsTarget[y] = step;
       }
     }
   }
 
-  return Array.from(hitsTarget);
+  return hitsTarget;
 }
 
 function getHighestYposition(velocity) {
@@ -59,8 +61,37 @@ let xVelocities = getXvelocities(target);
 let yVelocities = getYvelocities(target);
 
 // part one
-let yVelocity = yVelocities[yVelocities.length - 1];
-console.log(getHighestYposition(yVelocity));
+let yVelocity = Object.keys(yVelocities).sort((a, b) => a - b).pop();
+console.log(getHighestYposition(parseInt(yVelocity)));
 
 // part two
-// console.log(xVelocities.length * yVelocities.length);
+function getAllPossiblePairs(target) {
+  let allPairs = new Set();
+
+  for (let x = 1; x <= target.x.right; x++) {
+    for (let y = target.y.bottom; y <= 5000; y++) {
+      let xPosition = 0;
+      let xVelocity = x;
+      let yPosition = 0;
+      let yVelocity = y;
+
+      while (xPosition <= target.x.right && yPosition >= target.y.bottom) {
+        xPosition += xVelocity;
+        yPosition += yVelocity;
+        if (xVelocity > 0) xVelocity--;
+        yVelocity--;
+
+        if (withinTarget([xPosition, yPosition], target)) {
+          allPairs.add(`${x},${y}`);
+        }
+      }
+    }
+  }
+
+  return allPairs;
+}
+
+// answer 2304 is too low
+let allPossiblePairs = getAllPossiblePairs(target);
+console.log(allPossiblePairs.size);
+
