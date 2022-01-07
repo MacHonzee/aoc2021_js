@@ -4,6 +4,12 @@ class Utils {
       cb(i);
     }
   }
+
+  rangeTimes(from, to, cb) {
+    for (let i = from; i <= to; i++) {
+      cb(i);
+    }
+  }
 }
 
 module.exports = new Utils();
