@@ -22,9 +22,9 @@ class DeterministicDice {
 }
 
 class Player {
-  constructor(start) {
-    this._score = 0;
+  constructor(start, startScore = 0) {
     this._position = start;
+    this._score = startScore;
   }
 
   move(rolled) {
@@ -38,10 +38,15 @@ class Player {
 
   saveScore() {
     this._score += this._position;
+    return this;
   }
 
   get score() {
     return this._score;
+  }
+
+  get position() {
+    return this._position;
   }
 }
 
@@ -73,6 +78,51 @@ function solvePartOne() {
 
 console.log(solvePartOne());
 
-function solvePartTwo() {}
+const QUANTUM_MAX_SCORE = 21;
+
+let winsCounter = {
+  one: 0,
+  two: 0,
+};
+
+function solvePartTwo() {
+  let player1 = new Player(player1start);
+  let player2 = new Player(player2start);
+
+  playQuantumGame(player1, player2, "one");
+
+  return winsCounter;
+}
+
+function playQuantumGame(player1, player2, whoPlays) {
+  let playingPlayer = whoPlays === "one" ? player1 : player2;
+  if (playingPlayer.score >= QUANTUM_MAX_SCORE) {
+    winsCounter[whoPlays]++;
+    return;
+  }
+
+  let oppositeTurn = whoPlays === "one" ? "two" : "one";
+
+  let playerVariant1 = new Player(playingPlayer.position, playingPlayer.score).move(1).saveScore();
+  playQuantumGame(
+    whoPlays === "one" ? playerVariant1 : player1,
+    whoPlays === "two" ? playerVariant1 : player2,
+    oppositeTurn
+  );
+
+  let playerVariant2 = new Player(playingPlayer.position, playingPlayer.score).move(2).saveScore();
+  playQuantumGame(
+    whoPlays === "one" ? playerVariant2 : player1,
+    whoPlays === "two" ? playerVariant2 : player2,
+    oppositeTurn
+  );
+
+  let playerVariant3 = new Player(playingPlayer.position, playingPlayer.score).move(3).saveScore();
+  playQuantumGame(
+    whoPlays === "one" ? playerVariant3 : player1,
+    whoPlays === "two" ? playerVariant3 : player2,
+    oppositeTurn
+  );
+}
 
 console.log(solvePartTwo());
