@@ -1,14 +1,16 @@
 // noinspection JSSuspiciousNameCombination
 
-const { cuboids, parseCuboidString } = require("../inputs/day22");
+const { cuboids } = require("../inputs/day22");
 const Utils = require("../utils");
 
 const RANGE_LIMITS = [-50, 50];
 
+// this was necessary for debugging to see if there were any calculation errors and if the algorithm
+// was generating more collisions than there should be
+const SKIP_COLLISION_CHECK = true;
+
 function solvePartOne(cuboids, checkRange) {
   const rebootMap = {};
-
-  let partOneIterations = 0;
 
   for (let cuboid of cuboids) {
     let boolValue = cuboid.value === "on";
@@ -19,8 +21,6 @@ function solvePartOne(cuboids, checkRange) {
       if (y.from < RANGE_LIMITS[0] || y.from > RANGE_LIMITS[1] || y.to < RANGE_LIMITS[0] || y.to > RANGE_LIMITS[1]) continue;
       if (x.from < RANGE_LIMITS[0] || x.from > RANGE_LIMITS[1] || x.to < RANGE_LIMITS[0] || x.to > RANGE_LIMITS[1]) continue;
     }
-
-    partOneIterations += countIterations(cuboid);
 
     Utils.rangeTimes(z.from, z.to, (z) => {
       Utils.rangeTimes(y.from, y.to, (y) => {
@@ -35,8 +35,7 @@ function solvePartOne(cuboids, checkRange) {
     });
   }
 
-  console.log("-> partOneIterations", partOneIterations);
-  console.log(Object.keys(rebootMap).length);
+  console.log("-> partOne", Object.keys(rebootMap).length);
 }
 
 solvePartOne(cuboids, true);
@@ -70,11 +69,6 @@ function subtractLines(majorLine, dividedLine) {
   }
 }
 
-function countIterations(cuboid) {
-  let {x, y, z} = cuboid.coordsMap;
-  return (x.to - x.from) * (y.to - y.from) * (z.to - z.from);
-}
-
 function getCuboidKey(cuboid) {
   let {x, y, z} = cuboid.coordsMap;
   return `${cuboid.value} ${x.from}..${x.to},${y.from}..${y.to},${z.from}..${z.to}`;
@@ -84,14 +78,14 @@ function getCollisionTree(cuboids) {
   let allCollisions = {};
   let noCollisions = [];
 
-  cuboids.forEach((cuboidA, i) => {
+  for (let i = 0; i < cuboids.length; i++) {
+    let cuboidA = cuboids[i];
     let {x: xA, y: yA, z: zA} = cuboidA.coordsMap;
     let keyA = getCuboidKey(cuboidA);
 
     let hasCollision = false;
-    cuboids.forEach((cuboidB, y) => {
-      if (y <= i) return; // to remove duplicit collisions
-
+    for (let y = i + 1; y < cuboids.length; y++) {
+      let cuboidB = cuboids[y];
       let {x: xB, y: yB, z: zB} = cuboidB.coordsMap;
 
       if (subtractLines(xA, xB) && subtractLines(yA, yB) && subtractLines(zA, zB)) {
@@ -99,12 +93,14 @@ function getCollisionTree(cuboids) {
         allCollisions[keyA] = allCollisions[keyA] || { cuboid: cuboidA, collisions: [] };
         allCollisions[keyA].collisions.push(cuboidB);
       }
-    });
+    }
 
     if (!hasCollision) {
       noCollisions.push(cuboidA);
     }
-  });
+
+    if (SKIP_COLLISION_CHECK) break;
+  }
 
   return { allCollisions, noCollisions };
 }
@@ -121,59 +117,21 @@ function getCurrentCollisions(universe, key) {
 }
 
 function processCuboidCollision(universe, newCuboid, collidingCuboid) {
-  // first we remove original cuboid from universe to make sure that there will be no conflict again,
-  // because we might be adding some new cuboids back (and we do not know how many yet in this point)
-  universe.shift();
+  // we always remove the collidingCuboid, because it is either replaced by newCuboid completely
+  // or broken into new smaller pieces
+  universe.splice(universe.indexOf(collidingCuboid), 1);
 
-  // TODO it should be possible to refactor this, probably we dont need two different methods,
-  // we can probably just remove collidingCuboid, add the newCuboid if it has "on" value and add the leftovers after
-  // breaking the collidingCuboid
-
-  // then we do one of two things -> if newCuboid is "on", we add cuboids together, else we subtract them
-  if (newCuboid.value === "on") {
-    universe = joinCuboids(universe, newCuboid, collidingCuboid);
-  } else {
-    // collidingCuboid is always "on", because universe contains only non-colliding "on" cuboids
-    universe = subtractCuboids(universe, newCuboid, collidingCuboid);
-  }
-
-  return universe;
-}
-
-// TODO it should be possible to refactor this
-function joinCuboids(universe, newCuboid, collidingCuboid) {
-  // now we check how much they collide
-  if (includesCuboidWithin(newCuboid, collidingCuboid)) {
-    universe.unshift(newCuboid);
-    universe.splice(universe.indexOf(collidingCuboid), 1);
-  } else if (includesCuboidWithin(collidingCuboid, newCuboid)) {
-    // nothing, its ok, because newCuboid is not in universe now and collidingCuboid still is,
-    // and since it is on + on cuboid values, we can just keep the old collidingCuboid and go on
-    return universe;
-  } else {
-    // there is a partial overlap -> we split newCuboid to smaller parts then
-    let { cuboidsAfterSplit } = splitCuboidByCuboid(newCuboid, collidingCuboid);
-
-    // we add newCuboid (which has "on" value), ignore the created collisionCuboid and add all cuboidsAfterSplit
-    universe.unshift(newCuboid);
-    universe.splice(universe.indexOf(collidingCuboid), 1);
-    universe = universe.concat(cuboidsAfterSplit);
-  }
+  // then add the rest of the cuboids that have been created by breaking collidingCuboid into smaller pieces
+  // the "collision" cuboid is always ignored, because it is part of newCuboid (and we do not care about value of
+  // newCuboid this way, either way it is ignored)
+  let { cuboidsAfterSplit } = splitCuboidByCuboid(newCuboid, collidingCuboid);
+  universe = universe.concat(cuboidsAfterSplit);
 
   return universe;
 }
 
 function inside(point, line) {
   return point >= line.from && point <= line.to;
-}
-
-function includesCuboidWithin(biggerCuboid, smallerCuboid) {
-  let { x: bigX, y: bigY, z: bigZ } = biggerCuboid.coordsMap;
-  let { x: smallX, y: smallY, z: smallZ } = smallerCuboid.coordsMap;
-
-  return bigX.from <= smallX.from && bigX.to >= smallX.to &&
-    bigY.from <= smallY.from && bigY.to >= smallY.to &&
-    bigZ.from <= smallZ.from && bigZ.to >= smallZ.to;
 }
 
 const AXISES = ["left", "collision", "right"];
@@ -215,30 +173,80 @@ function splitCuboidByCuboid(newCuboid, collidingCuboid) {
     });
   });
 
+  cuboidsAfterSplit = mergeCuboids(cuboidsAfterSplit);
+
   return { collisionCuboid, cuboidsAfterSplit };
 }
 
-// here, newCuboid has "off" value, so we are killing some of the collidingCuboids
-function subtractCuboids(universe, newCuboid, collidingCuboid) {
-  // it does not matter if one cuboid contains another, we always need to remove the collidingCuboid
-  universe.splice(universe.indexOf(collidingCuboid), 1);
+function samePlane(planeA, planeB) {
+  return planeA.from === planeB.from && planeA.to === planeB.to;
+}
 
-  // then add the rest of the cuboids that have been created
-  let { cuboidsAfterSplit } = splitCuboidByCuboid(newCuboid, collidingCuboid);
-  universe = universe.concat(cuboidsAfterSplit);
+function neighbourPlanes(planeA, planeB) {
+  return (Math.abs(planeB.from - planeA.to) === 1) || (Math.abs(planeA.from - planeB.to) === 1);
+}
 
-  return universe;
+function mergeCuboids(cuboids) {
+  let cuboidList = [];
+  cuboids.forEach((cuboid, i) => {
+
+    let cuboidsToDelete = [];
+    for (let y = i + 1; y < cuboids.length; y++) {
+      let mergedCuboid = cuboids[y];
+
+      let {x: xA, y: yA, z: zA} = cuboid.coordsMap;
+      let {x: xB, y: yB, z: zB} = mergedCuboid.coordsMap;
+
+      let samePlaneX = samePlane(xA, xB);
+      let samePlaneY = samePlane(yA, yB);
+      let samePlaneZ = samePlane(zA, zB);
+
+      if (samePlaneX && samePlaneY && neighbourPlanes(zA, zB)) {
+        cuboidsToDelete.push(mergedCuboid);
+        cuboid.coordsMap.z = { from: Math.min(zA.from, zB.from), to: Math.max(zA.to, zB.to) };
+      }
+
+      if (samePlaneX && samePlaneZ && neighbourPlanes(yA, yB)) {
+        cuboidsToDelete.push(mergedCuboid);
+        cuboid.coordsMap.y = { from: Math.min(yA.from, yB.from), to: Math.max(yA.to, yB.to) };
+      }
+
+      if (samePlaneY && samePlaneZ && neighbourPlanes(xA, xB)) {
+        cuboidsToDelete.push(mergedCuboid);
+        cuboid.coordsMap.x = { from: Math.min(xA.from, xB.from), to: Math.max(xA.to, xB.to) };
+      }
+    }
+
+    cuboidsToDelete.forEach(deletedCuboid => {
+      cuboids.splice(cuboids.indexOf(deletedCuboid), 1);
+    });
+
+    cuboidList.push(cuboid);
+  });
+
+  return cuboidList;
+}
+
+function getCuboidVolume(cuboid) {
+  let {x, y, z} = cuboid.coordsMap;
+  return ((x.to - x.from + 1) *  (y.to - y.from + 1) *  (z.to - z.from + 1));
+}
+
+function countVolume(universe) {
+  return universe.reduce((sum, cuboid) => sum + getCuboidVolume(cuboid), 0);
 }
 
 function solvePartTwo(cuboids) {
   let universe = [];
 
   for (let cuboid of cuboids) {
+    console.log(cuboids.indexOf(cuboid));
+
     // add cuboid to beginning
     universe.unshift(cuboid);
     let key = getCuboidKey(cuboid);
 
-    // get all current collisions
+    // get all current collisions, there should be collisions only with the added cuboid
     let currentCollisions = getCurrentCollisions(universe, key);
 
     // we can freely remove "off" cuboid in case it does not collide with any other (it does not turn off anything)
@@ -247,21 +255,32 @@ function solvePartTwo(cuboids) {
       continue;
     }
 
+    // process all of the collisions
     while (currentCollisions) {
       // we have to check collisions multiple times, because if we have two collisions, splitting the root cuboid might
       // interact with the second colision and even add another colliding cuboids
-      universe = processCuboidCollision(universe, cuboid, currentCollisions[0]);
+      universe = processCuboidCollision(universe, cuboid, currentCollisions.collisions[0]);
 
       currentCollisions = getCurrentCollisions(universe, key);
     }
+
+    if (cuboid.value === "off") {
+      universe.shift();
+    }
+
+    universe = mergeCuboids(universe);
   }
+
+  console.log("cuboidCount", universe.length);
+
+  return countVolume(universe);
 }
 
-// solvePartTwo(cuboids);
+let volume = solvePartTwo(cuboids);
+console.log("-> partTwo", volume);
 
-let cuboidA = { value: "on", coordsMap: { x: { from: 6, to: 8 }, y: { from: 6, to: 8 }, z: { from: 6, to: 8 }}};
-let cuboidB = { value: "on", coordsMap: { x: { from: 5, to: 10 }, y: { from: 5, to: 10 }, z: { from: 5, to: 10 }}};
-
-let { collisionCuboid, cuboidsAfterSplit } = splitCuboidByCuboid(cuboidA, cuboidB);
-console.log(collisionCuboid);
-console.log(cuboidsAfterSplit);
+// let cuboidA = { value: "on", coordsMap: { x: { from: 5, to: 10 }, y: { from: 5, to: 10 }, z: { from: 5, to: 10 }}};
+// let cuboidB = { value: "on", coordsMap: { x: { from: 7, to: 8 }, y: { from: 7, to: 8 }, z: { from: 7, to: 8 }}};
+//
+// let data = splitCuboidByCuboid(cuboidB, cuboidA);
+// console.log(data);
