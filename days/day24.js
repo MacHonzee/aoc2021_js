@@ -1,5 +1,5 @@
 const instructions = require("../inputs/day24");
-const Utils = require("../utils");
+const Utils = require("../utils/utils");
 
 class ModelNumber {
   constructor (start) {

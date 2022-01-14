@@ -1,4 +1,4 @@
-const Utils = require("../utils");
+const Utils = require("../utils/utils");
 const [player1start, player2start] = require("../inputs/day21");
 
 const MAX_SCORE = 1000;

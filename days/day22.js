@@ -1,7 +1,7 @@
 // noinspection JSSuspiciousNameCombination
 
 const { cuboids } = require("../inputs/day22");
-const Utils = require("../utils");
+const Utils = require("../utils/utils");
 
 const RANGE_LIMITS = [-50, 50];
 

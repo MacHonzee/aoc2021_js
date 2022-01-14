@@ -1,5 +1,5 @@
 const map = require("../inputs/day25");
-const Utils = require("../utils");
+const Utils = require("../utils/utils");
 
 function moveEast() {
   let possibleMoves = [];
